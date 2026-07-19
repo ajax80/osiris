@@ -107,7 +107,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       createDot(map, 'dot-cctv', '#39FF14', 10);
 
       // Sources
-      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation'];
+      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'cables', 'aurora', 'air-quality', 'internet-outages'];
       sources.forEach(s => map.addSource(s, { type: 'geojson', data: EMPTY_FC }));
 
       // ── CONFLICT ZONES — small warning markers (not polygons) ──
@@ -241,6 +241,50 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         'circle-radius': ['interpolate',['linear'],['zoom'], 1,2, 5,4, 10,8],
         'circle-color': '#FF6B00', 'circle-opacity': 0.5, 'circle-blur': 0.5,
       }});
+
+      // Submarine cables
+      map.addLayer({ id: 'cables-lines', type: 'line', source: 'cables', paint: {
+        'line-color': ['coalesce', ['get','color'], '#00BCD4'],
+        'line-width': ['interpolate',['linear'],['zoom'], 1,0.5, 5,1, 10,2],
+        'line-opacity': 0.55,
+      }});
+
+      // Aurora oval
+      map.addLayer({ id: 'aurora-glow', type: 'circle', source: 'aurora', paint: {
+        'circle-radius': ['interpolate',['linear'],['zoom'], 1,4, 4,10, 8,22],
+        'circle-color': '#00E676', 'circle-blur': 1,
+        'circle-opacity': ['interpolate',['linear'],['get','intensity'], 8,0.05, 50,0.25, 100,0.45],
+      }});
+
+      // Air quality
+      map.addLayer({ id: 'aq-glow', type: 'circle', source: 'air-quality', paint: {
+        'circle-radius': ['interpolate',['linear'],['zoom'], 1,6, 5,12, 10,22],
+        'circle-color': ['get','color'], 'circle-opacity': 0.16, 'circle-blur': 1,
+      }});
+      map.addLayer({ id: 'aq-dots', type: 'circle', source: 'air-quality', paint: {
+        'circle-radius': ['interpolate',['linear'],['zoom'], 1,4, 5,7, 10,11],
+        'circle-color': ['get','color'], 'circle-opacity': 0.85,
+        'circle-stroke-width': 1, 'circle-stroke-color': '#000', 'circle-stroke-opacity': 0.4,
+      }});
+      map.addLayer({ id: 'aq-label', type: 'symbol', source: 'air-quality', minzoom: 3, layout: {
+        'text-field': ['to-string',['get','aqi']], 'text-size': 9, 'text-font': ['Open Sans Regular'],
+        'text-offset': [0, 1.5], 'text-allow-overlap': false,
+      }, paint: { 'text-color': '#fff', 'text-halo-color': '#000', 'text-halo-width': 1, 'text-opacity': 0.8 }});
+
+      // Internet outages
+      map.addLayer({ id: 'outage-glow', type: 'circle', source: 'internet-outages', paint: {
+        'circle-radius': ['interpolate',['linear'],['zoom'], 1,10, 5,20, 10,34],
+        'circle-color': '#FF1744', 'circle-opacity': 0.15, 'circle-blur': 1,
+      }});
+      map.addLayer({ id: 'outage-dots', type: 'circle', source: 'internet-outages', paint: {
+        'circle-radius': ['interpolate',['linear'],['zoom'], 1,5, 5,8, 10,12],
+        'circle-color': '#FF1744', 'circle-opacity': 0.7,
+        'circle-stroke-width': 2, 'circle-stroke-color': '#FF1744', 'circle-stroke-opacity': 0.4,
+      }});
+      map.addLayer({ id: 'outage-label', type: 'symbol', source: 'internet-outages', minzoom: 2, layout: {
+        'text-field': ['get','name'], 'text-size': 10, 'text-font': ['Open Sans Regular'],
+        'text-offset': [0, 1.6], 'text-allow-overlap': false,
+      }, paint: { 'text-color': '#FF6B8A', 'text-halo-color': '#000', 'text-halo-width': 1, 'text-opacity': 0.85 }});
 
       // CCTV — outer glow ring
       map.addLayer({ id: 'cctv-glow', type: 'circle', source: 'cctv', paint: {
@@ -786,6 +830,26 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
 
   useEffect(() => {
     if (!mapReady) return;
+    setGeo('cables', activeLayers.cables && data.cables?.features ? data.cables.features : []);
+  }, [mapReady, data.cables, activeLayers.cables, setGeo]);
+
+  useEffect(() => {
+    if (!mapReady) return;
+    setGeo('aurora', activeLayers.aurora && data.aurora ? data.aurora.map((p: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [p.lng, p.lat] }, properties: { intensity: p.intensity } })) : []);
+  }, [mapReady, data.aurora, activeLayers.aurora, setGeo]);
+
+  useEffect(() => {
+    if (!mapReady) return;
+    setGeo('air-quality', activeLayers.air_quality && data.air_quality ? data.air_quality.map((s: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [s.lng, s.lat] }, properties: { aqi: s.aqi, color: s.color, name: s.name, level: s.level } })) : []);
+  }, [mapReady, data.air_quality, activeLayers.air_quality, setGeo]);
+
+  useEffect(() => {
+    if (!mapReady) return;
+    setGeo('internet-outages', activeLayers.internet_outages && data.internet_outages ? data.internet_outages.map((o: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [o.lng, o.lat] }, properties: { name: o.name, score: o.score } })) : []);
+  }, [mapReady, data.internet_outages, activeLayers.internet_outages, setGeo]);
+
+  useEffect(() => {
+    if (!mapReady) return;
     setGeo('gdelt', activeLayers.global_incidents && data.gdelt ? data.gdelt.map((e: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [e.lng, e.lat] }, properties: { name: e.name } })) : []);
   }, [mapReady, data.gdelt, activeLayers.global_incidents, setGeo]);
 
@@ -907,6 +971,10 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     setVis(['war-alerts-targets-glow','war-alerts-targets','war-alerts-label','war-alerts-lines'], !!activeLayers.war_alerts);
     setVis(['balloon-dots','balloon-label'], activeLayers.balloons);
     setVis(['rad-glow','rad-dots','rad-label'], activeLayers.radiation);
+    setVis(['cables-lines'], activeLayers.cables);
+    setVis(['aurora-glow'], activeLayers.aurora);
+    setVis(['aq-glow','aq-dots','aq-label'], activeLayers.air_quality);
+    setVis(['outage-glow','outage-dots','outage-label'], activeLayers.internet_outages);
   }, [mapReady, activeLayers, setVis]);
 
   // Fly-to

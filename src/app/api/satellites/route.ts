@@ -182,7 +182,16 @@ async function fetchTLEFromSource(source: typeof TLE_SOURCES[0]): Promise<string
   }
 }
 
+let satCache: { body: any } | null = null;
+let satCacheAt = 0;
+const SAT_CACHE_TTL = 300000; // 5 min — TLEs change slowly, no need to refetch per poll
+
 export async function GET() {
+  if (satCache && Date.now() - satCacheAt < SAT_CACHE_TTL) {
+    return NextResponse.json(satCache.body, {
+      headers: { 'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=300' },
+    });
+  }
   try {
     let allSats: any[] = [];
     let source = 'unknown';
@@ -246,13 +255,16 @@ export async function GET() {
       });
     }
 
-    return NextResponse.json({
+    const body = {
       satellites,
       total: satellites.length,
       source,
       raw_count: allSats.length,
       timestamp: new Date().toISOString(),
-    }, {
+    };
+    satCache = { body };
+    satCacheAt = Date.now();
+    return NextResponse.json(body, {
       headers: {
         'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=300',
       },

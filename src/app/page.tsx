@@ -100,6 +100,10 @@ export default function Dashboard() {
     global_incidents: true,
     war_alerts: false,
     gps_jamming: false,
+    cables: false,
+    aurora: false,
+    air_quality: false,
+    internet_outages: false,
     day_night: true,
   });
   const [liveFeedUrl, setLiveFeedUrl] = useState<string | null>(null);
@@ -309,6 +313,26 @@ export default function Dashboard() {
     if (activeLayers.global_incidents && !layerFetchedRef.current.has('gdelt')) {
       fetchEndpoint('/api/gdelt', d => ({ gdelt: d.events }));
       layerFetchedRef.current.add('gdelt');
+    }
+    // Submarine cables
+    if (activeLayers.cables && !layerFetchedRef.current.has('cables')) {
+      fetchEndpoint('/api/cables', d => ({ cables: d, cables_count: (d.features || []).length }));
+      layerFetchedRef.current.add('cables');
+    }
+    // Aurora oval
+    if (activeLayers.aurora && !layerFetchedRef.current.has('aurora')) {
+      fetchEndpoint('/api/aurora', d => ({ aurora: d.points }));
+      layerFetchedRef.current.add('aurora');
+    }
+    // Air quality
+    if (activeLayers.air_quality && !layerFetchedRef.current.has('air_quality')) {
+      fetchEndpoint('/api/air-quality', d => ({ air_quality: d.stations }));
+      layerFetchedRef.current.add('air_quality');
+    }
+    // Internet outages
+    if (activeLayers.internet_outages && !layerFetchedRef.current.has('internet_outages')) {
+      fetchEndpoint('/api/internet-outages', d => ({ internet_outages: d.outages }));
+      layerFetchedRef.current.add('internet_outages');
     }
     // War Alerts (Global Conflicts)
     if (activeLayers.war_alerts && !layerFetchedRef.current.has('war_alerts')) {

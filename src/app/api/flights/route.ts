@@ -6,13 +6,39 @@ import { NextResponse } from 'next/server';
  * Covers 6 global regions for maximum coverage
  */
 
+// adsb.fi caps the radius at 250 nm, so coverage is a grid of hub cells
+const ADSB_DIST = 250;
 const REGIONS = [
-  { lat: 39.8, lon: -98.5, dist: 2000 },   // North America
-  { lat: 50.0, lon: 15.0, dist: 2000 },     // Europe
-  { lat: 35.0, lon: 105.0, dist: 2000 },    // Asia
-  { lat: -25.0, lon: 133.0, dist: 2000 },   // Australia
-  { lat: 0.0, lon: 20.0, dist: 2500 },      // Africa
-  { lat: -15.0, lon: -60.0, dist: 2000 },   // South America
+  // United States
+  { lat: 40.7, lon: -74.0 },   // New York
+  { lat: 38.9, lon: -77.0 },   // Washington DC
+  { lat: 33.7, lon: -84.4 },   // Atlanta
+  { lat: 25.8, lon: -80.3 },   // Miami
+  { lat: 41.9, lon: -87.6 },   // Chicago
+  { lat: 39.3, lon: -94.7 },   // Kansas City
+  { lat: 32.8, lon: -97.0 },   // Dallas
+  { lat: 29.8, lon: -95.4 },   // Houston
+  { lat: 39.7, lon: -104.9 },  // Denver
+  { lat: 33.4, lon: -112.1 },  // Phoenix
+  { lat: 34.0, lon: -118.2 },  // Los Angeles
+  { lat: 37.6, lon: -122.4 },  // San Francisco
+  { lat: 47.5, lon: -122.3 },  // Seattle
+  // Canada / Mexico
+  { lat: 43.7, lon: -79.4 },   // Toronto
+  { lat: 19.4, lon: -99.1 },   // Mexico City
+  // Europe
+  { lat: 51.5, lon: -0.1 },    // London
+  { lat: 50.0, lon: 8.6 },     // Frankfurt
+  { lat: 40.4, lon: -3.7 },    // Madrid
+  { lat: 41.0, lon: 28.9 },    // Istanbul
+  // Middle East / Asia / Oceania
+  { lat: 25.3, lon: 55.4 },    // Dubai
+  { lat: 1.4, lon: 103.9 },    // Singapore
+  { lat: 35.6, lon: 139.8 },   // Tokyo
+  { lat: -33.9, lon: 151.2 },  // Sydney
+  // South America / Africa
+  { lat: -23.5, lon: -46.6 },  // Sao Paulo
+  { lat: -26.1, lon: 28.2 },   // Johannesburg
 ];
 
 // Helicopter type codes
@@ -54,19 +80,32 @@ const AIRLINE_CODE_RE = /^([A-Z]{3})\d/;
 
 async function fetchRegion(region: typeof REGIONS[0]): Promise<any[]> {
   try {
-    const url = `https://api.adsb.lol/v2/lat/${region.lat}/lon/${region.lon}/dist/${region.dist}`;
+    const url = `https://opendata.adsb.fi/api/v2/lat/${region.lat}/lon/${region.lon}/dist/${ADSB_DIST}`;
     const res = await fetch(url, {
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(9000),
       headers: { 'Accept': 'application/json' },
     });
     if (res.ok) {
       const data = await res.json();
-      return data.ac || [];
+      return data.aircraft || [];
     }
   } catch (e) {
     console.warn(`Region fetch failed for lat=${region.lat}:`, e);
   }
   return [];
+}
+
+// adsb.fi sits behind Cloudflare, which rejects large concurrent bursts —
+// fetch the grid in small batches instead of all at once
+async function fetchAllRegions(): Promise<any[]> {
+  const out: any[] = [];
+  const BATCH = 1;
+  for (let i = 0; i < REGIONS.length; i += BATCH) {
+    const results = await Promise.allSettled(REGIONS.slice(i, i + BATCH).map(fetchRegion));
+    for (const r of results) if (r.status === 'fulfilled') out.push(...r.value);
+    if (i + BATCH < REGIONS.length) await new Promise(res => setTimeout(res, 150));
+  }
+  return out;
 }
 
 function classifyFlight(f: any) {
@@ -154,23 +193,16 @@ export async function GET() {
 
   // Start new global fetch
   fetchPromise = (async () => {
-    // Fetch all 6 regions in parallel
-    const regionResults = await Promise.allSettled(
-      REGIONS.map(r => fetchRegion(r))
-    );
+    const regionAircraft = await fetchAllRegions();
 
     const allRaw: any[] = [];
     const seenHex = new Set<string>();
 
-    for (const result of regionResults) {
-      if (result.status === 'fulfilled') {
-        for (const ac of result.value) {
-          const hex = (ac.hex || '').toLowerCase().trim();
-          if (hex && !seenHex.has(hex)) {
-            seenHex.add(hex);
-            allRaw.push(ac);
-          }
-        }
+    for (const ac of regionAircraft) {
+      const hex = (ac.hex || '').toLowerCase().trim();
+      if (hex && !seenHex.has(hex)) {
+        seenHex.add(hex);
+        allRaw.push(ac);
       }
     }
 
@@ -186,7 +218,7 @@ export async function GET() {
       if (!flight) continue;
 
       // GPS jamming detection
-      if (typeof flight.nac_p === 'number' && flight.nac_p <= 4 && !flight.grounded) {
+      if (typeof flight.nac_p === 'number' && flight.nac_p <= 4 && !flight.grounded && flight.alt > 3000) {
         gpsJamming.push({
           lat: flight.lat,
           lng: flight.lng,

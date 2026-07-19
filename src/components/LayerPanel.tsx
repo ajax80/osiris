@@ -6,6 +6,7 @@ import {
   Plane, Satellite, Activity, Globe, Radio, Eye,
   Shield, Sun, AlertTriangle, Camera, Flame, Target,
   CloudLightning, Radiation, Tv, Anchor, Ship,
+  Cable, Sparkles, Wind, WifiOff,
 } from 'lucide-react';
 
 interface LayerPanelProps {
@@ -30,6 +31,10 @@ const LAYER_CONFIG = [
   { key: 'global_incidents', label: 'Global Incidents', icon: AlertTriangle, color: '#FF3D3D', dataKey: 'gdelt' },
   { key: 'war_alerts', label: 'Global Conflicts (Simulated)', icon: Target, color: '#FF1744', dataKey: 'war_alerts' },
   { key: 'gps_jamming', label: 'GPS Jamming', icon: Radio, color: '#FF4444', dataKey: 'gps_jamming' },
+  { key: 'cables', label: 'Submarine Cables', icon: Cable, color: '#00BCD4', dataKey: 'cables_count' },
+  { key: 'aurora', label: 'Aurora Oval', icon: Sparkles, color: '#00E676', dataKey: 'aurora' },
+  { key: 'air_quality', label: 'Air Quality', icon: Wind, color: '#FFD700', dataKey: 'air_quality' },
+  { key: 'internet_outages', label: 'Internet Outages', icon: WifiOff, color: '#FF1744', dataKey: 'internet_outages' },
   { key: 'day_night', label: 'Day / Night Cycle', icon: Sun, color: '#448AFF', dataKey: null },
 ];
 

@@ -31,32 +31,37 @@ async function fetchTfLCameras(): Promise<any[]> {
 
 // ── US-WEST: WSDOT Washington State (~500) ──
 async function fetchWSDOTCameras(): Promise<any[]> {
+  const key = process.env.WSDOT_KEY;
+  if (!key) return [];
   try {
-    const res = await fetch('https://data.wsdot.wa.gov/log/public/cameras.json', { signal: AbortSignal.timeout(10000) });
+    const res = await fetch(`https://www.wsdot.wa.gov/Traffic/api/HighwayCameras/HighwayCamerasREST.svc/GetCamerasAsJson?AccessCode=${key}`, { signal: AbortSignal.timeout(12000) });
     if (!res.ok) return [];
     const data = await res.json();
-    return (data || []).map((cam: any) => ({
+    return (data || []).filter((c: any) => c.IsActive && c.ImageURL).map((cam: any) => ({
       id: `wsdot-${cam.CameraID}`, lat: cam.CameraLocation?.Latitude, lng: cam.CameraLocation?.Longitude,
-      name: cam.Title || 'WSDOT Camera', city: 'Washington', country: 'US',
-      feed_url: cam.ImageURL || '', source: 'WSDOT',
-    })).filter((c: any) => c.lat && c.lng && c.feed_url);
+      name: cam.Title || 'WSDOT Camera', city: cam.CameraLocation?.RoadName || 'Washington', country: 'US',
+      feed_url: cam.ImageURL, source: 'WSDOT',
+    })).filter((c: any) => c.lat && c.lng);
   } catch { return []; }
 }
 
 // ── US-WEST: Caltrans California Districts ──
 async function fetchCaltransCameras(): Promise<any[]> {
   const allCams: any[] = [];
-  for (const dist of ['d03','d04','d05','d06','d07','d08','d10','d11','d12']) {
+  const districts = ['d1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8', 'd9', 'd10', 'd11', 'd12'];
+  for (const dist of districts) {
     try {
       const res = await fetch(`https://cwwp2.dot.ca.gov/data/${dist}/cctv/cctvStatus${dist.toUpperCase()}.json`, { signal: AbortSignal.timeout(8000) });
       if (!res.ok) continue;
       const data = await res.json();
-      for (const cam of (data?.data || [])) {
-        const lat = parseFloat(cam.location?.latitude);
-        const lng = parseFloat(cam.location?.longitude);
-        const url = cam.cctv?.imageData?.static?.currentImageURL;
+      for (const item of (data?.data || [])) {
+        const c = item.cctv;
+        if (!c || c.inService !== 'true') continue;
+        const lat = parseFloat(c.location?.latitude);
+        const lng = parseFloat(c.location?.longitude);
+        const url = c.imageData?.static?.currentImageURL;
         if (!lat || !lng || !url) continue;
-        allCams.push({ id: `cal-${allCams.length}`, lat, lng, name: cam.location?.locationName || 'Caltrans', city: 'California', country: 'US', feed_url: url, source: 'Caltrans' });
+        allCams.push({ id: `cal-${allCams.length}`, lat, lng, name: c.location?.locationName || 'Caltrans', city: c.location?.nearbyPlace || 'California', country: 'US', feed_url: url, source: 'Caltrans' });
       }
     } catch { /* silent */ }
   }
@@ -158,21 +163,18 @@ async function fetchUSCentralCameras(): Promise<any[]> {
 // ── US-EAST: NYC, DC, Florida, Georgia ──
 async function fetchUSEastCameras(): Promise<any[]> {
   const cams: any[] = [];
-  // NYC DOT (via proxy to bypass IP blocking)
+  // NYC DOT — direct (allorigins proxy is dead)
   try {
-    const res = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent('https://webcams.nyctmc.org/api/cameras'), { signal: AbortSignal.timeout(10000) });
+    const res = await fetch('https://webcams.nyctmc.org/api/cameras', { signal: AbortSignal.timeout(10000), headers: { 'Accept': 'application/json' } });
     if (res.ok) {
-      const wrapper = await res.json();
-      if (wrapper.contents) {
-        const data = JSON.parse(wrapper.contents);
-        for (const cam of (data || []).slice(0, 1000)) {
-          if (!cam.latitude || !cam.longitude) continue;
-          cams.push({
-            id: `nyc-${cam.id || cam.cameraID || cams.length}`, lat: cam.latitude, lng: cam.longitude,
-            name: cam.name || cam.cameraName || 'NYC Camera', city: 'New York', country: 'US',
-            feed_url: cam.imageUrl || cam.url || `https://webcams.nyctmc.org/api/cameras/${cam.id}/image`, source: 'NYC DOT',
-          });
-        }
+      const data = await res.json();
+      for (const cam of (Array.isArray(data) ? data : []).slice(0, 1000)) {
+        if (!cam.latitude || !cam.longitude) continue;
+        cams.push({
+          id: `nyc-${cam.id || cams.length}`, lat: cam.latitude, lng: cam.longitude,
+          name: cam.name || 'NYC Camera', city: cam.area || 'New York', country: 'US',
+          feed_url: cam.imageUrl || `https://webcams.nyctmc.org/api/cameras/${cam.id}/image`, source: 'NYC DOT',
+        });
       }
     }
   } catch (e) {
