@@ -1,5 +1,26 @@
 import { NextResponse } from 'next/server';
 import { fetchAsfinagCameras } from './asfinag';
+import { fetchAustraliaCameras } from './australia';
+import { fetchBulgariaCameras } from './bulgaria';
+import { fetchCzechiaCameras } from './czechia';
+import { fetchFinlandCameras } from './finland';
+import { fetchFranceCameras } from './france';
+import { fetchGermanyCameras } from './germany';
+import { fetchGreeceCameras } from './greece';
+import { fetchHongKongCameras } from './hongkong';
+import { fetchIcelandCameras } from './iceland';
+import { fetchItalyCameras } from './italy';
+import { fetchJapanCameras } from './japan';
+import { fetchMacedoniaCameras } from './macedonia';
+import { fetchPolandCameras } from './poland';
+import { fetchRomaniaCameras } from './romania';
+import { fetchSerbiaCameras } from './serbia';
+import { fetchSlovakiaCameras } from './slovakia';
+import { fetchSpainCameras } from './spain';
+import { fetchSwitzerlandCameras } from './switzerland';
+import { fetchTaiwanCameras } from './taiwan';
+import { fetchTurkeyCameras } from './turkey';
+import { fetchUtahCameras } from './utah';
 
 /**
  * OSIRIS — Worldwide CCTV Camera API v2
@@ -283,6 +304,27 @@ const REGION_FETCHERS: Record<string, () => Promise<any[]>> = {
   'canada': fetchCanadaCameras,
   'europe': fetchEuropeCameras,
   'asia': fetchAsiaCameras,
+  'utah': fetchUtahCameras,
+  'bulgaria': fetchBulgariaCameras,
+  'greece': fetchGreeceCameras,
+  'serbia': fetchSerbiaCameras,
+  'macedonia': fetchMacedoniaCameras,
+  'turkey': fetchTurkeyCameras,
+  'romania': fetchRomaniaCameras,
+  'italy': fetchItalyCameras,
+  'czechia': fetchCzechiaCameras,
+  'slovakia': fetchSlovakiaCameras,
+  'germany': fetchGermanyCameras,
+  'france': fetchFranceCameras,
+  'spain': fetchSpainCameras,
+  'poland': fetchPolandCameras,
+  'finland': fetchFinlandCameras,
+  'iceland': fetchIcelandCameras,
+  'switzerland': fetchSwitzerlandCameras,
+  'australia': fetchAustraliaCameras,
+  'taiwan': fetchTaiwanCameras,
+  'japan': fetchJapanCameras,
+  'hongkong': fetchHongKongCameras,
 };
 
 // Determine which regions to fetch based on viewport bounds
@@ -296,15 +338,60 @@ function getRegionsForBounds(lat: number, lng: number, radius: number): string[]
   if (lat > 24 && lat < 49 && lng > -125 && lng < -100) regions.push('us-west');
   // US-Central
   if (lat > 24 && lat < 49 && lng > -105 && lng < -80) regions.push('us-central');
+  // Utah (UDOT) — explicit, since us-west only covers WA + CA
+  if (lat > 36.9 && lat < 42.1 && lng > -114.2 && lng < -108.9) regions.push('utah');
   // Canada
   if (lat > 42 && lat < 70 && lng > -141 && lng < -52) regions.push('canada');
-  // Europe
-  if (lat > 35 && lat < 72 && lng > -11 && lng < 40) regions.push('europe');
-  // Asia (includes Middle East, SE Asia)
-  if ((lat > -10 && lat < 60 && lng > 60 && lng < 150)) regions.push('asia');
-  // Australia explicitly
-  if (lat > -45 && lat < -10 && lng > 110 && lng < 155) regions.push('asia');
-  
+
+  // Europe — per-country sources take precedence over the generic aggregate
+  const inBulgaria = lat > 41 && lat < 44.5 && lng > 22 && lng < 29.5;
+  const inGreece = lat > 34.5 && lat < 41.8 && lng > 19 && lng < 30;
+  const inSerbia = lat > 42 && lat < 46.5 && lng > 18.8 && lng < 23.3;
+  const inMacedonia = lat > 40.8 && lat < 42.8 && lng > 20.4 && lng < 23.2;
+  const inRomania = lat > 43.5 && lat < 48.5 && lng > 20 && lng < 29.8;
+  const inTurkey = lat > 35.5 && lat < 42.5 && lng > 25.5 && lng < 45;
+  const inItaly = lat > 36 && lat < 47.5 && lng > 6.5 && lng < 18.5;
+  const inCzechia = lat > 48.5 && lat < 51.1 && lng > 12 && lng < 18.9;
+  const inSlovakia = lat > 47.7 && lat < 49.6 && lng > 16.8 && lng < 22.6;
+  const inGermany = lat > 47 && lat < 55.1 && lng > 5.8 && lng < 15.1;
+  const inFrance = lat > 42.3 && lat < 51.1 && lng > -5 && lng < 8.3;
+  const inSpain = lat > 27 && lat < 43.8 && lng > -18.2 && lng < 4.4;
+  const inPoland = lat > 49.0 && lat < 55.0 && lng > 14.1 && lng < 24.1;
+  const inFinland = lat > 59.5 && lat < 70.1 && lng > 20 && lng < 31.6;
+  const inIceland = lat > 63.0 && lat < 67.0 && lng > -25.0 && lng < -13.0;
+  const inSwitzerland = lat > 45.8 && lat < 47.8 && lng > 5.9 && lng < 10.5;
+  const inBalkans = inBulgaria || inGreece || inSerbia || inMacedonia || inRomania || inTurkey;
+  const inWesternEurope = inItaly || inCzechia || inSlovakia || inGermany || inFrance || inSpain || inPoland || inFinland || inIceland || inSwitzerland;
+
+  if (lat > 35 && lat < 72 && lng > -11 && lng < 40 && !inBalkans && !inWesternEurope) regions.push('europe');
+  if (inBulgaria) regions.push('bulgaria');
+  if (inGreece) regions.push('greece');
+  if (inSerbia) regions.push('serbia');
+  if (inMacedonia) regions.push('macedonia');
+  if (inRomania) regions.push('romania');
+  if (inTurkey) regions.push('turkey');
+  if (inItaly) regions.push('italy');
+  if (inCzechia) regions.push('czechia');
+  if (inSlovakia) regions.push('slovakia');
+  if (inGermany) regions.push('germany');
+  if (inFrance) regions.push('france');
+  if (inSpain) regions.push('spain');
+  if (inPoland) regions.push('poland');
+  if (inFinland) regions.push('finland');
+  if (inIceland) regions.push('iceland');
+  if (inSwitzerland) regions.push('switzerland');
+
+  // Asia — per-country sources, then the generic aggregate
+  const inTaiwan = lat > 21.8 && lat < 25.4 && lng > 119.5 && lng < 122.1;
+  const inJapan = lat > 30 && lat < 46 && lng > 128 && lng < 146;
+  const inHongKong = lat > 22.1 && lat < 22.6 && lng > 113.8 && lng < 114.5;
+  if (inTaiwan) regions.push('taiwan');
+  if (inJapan) regions.push('japan');
+  if (inHongKong) regions.push('hongkong');
+  if (lat > -10 && lat < 60 && lng > 60 && lng < 150) regions.push('asia');
+  // Australia
+  if (lat > -45 && lat < -10 && lng > 110 && lng < 155) regions.push('australia');
+
   return regions.length > 0 ? regions : ['uk', 'us-east']; // Default fallback
 }
 

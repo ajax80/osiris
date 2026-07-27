@@ -40,6 +40,11 @@ function toAsfinagCamera(cam: AsfinagWebcam): CctvCamera | null {
     return null;
   }
 
+  // Skip Hungarian road authority (Utinform) cameras — feeds are unavailable
+  if (cam.wcs_id.startsWith('Utinform')) {
+    return null;
+  }
+
   return {
     id: `asfinag-${cam.wcs_id}`,
     lat: cam.wgs84_lat,
@@ -52,9 +57,12 @@ function toAsfinagCamera(cam: AsfinagWebcam): CctvCamera | null {
   };
 }
 
+import { stealthFetch } from '@/lib/stealthFetch';
+
 async function fetchFreshAsfinagCameras(): Promise<CctvCamera[]> {
   try {
-    const res = await fetch(ASFINAG_WEBCAMS_URL, {
+    // 1. Fetch the manifest list for all active webcams
+    const res = await stealthFetch(ASFINAG_WEBCAMS_URL, {
       signal: AbortSignal.timeout(12000),
       headers: ASFINAG_HEADERS,
     });
