@@ -197,6 +197,26 @@ async function fetchUSEastCameras(): Promise<any[]> {
     }
   } catch { /* silent */ }
 
+  // Georgia 511 (GDOT)
+  const gaKey = process.env.GA511_KEY;
+  if (gaKey) {
+    try {
+      const res = await fetch(`https://511ga.org/api/v2/get/cameras?key=${gaKey}&format=json`, { signal: AbortSignal.timeout(10000), headers: { 'Accept': 'application/json' } });
+      if (res.ok) {
+        const data = await res.json();
+        for (const cam of (data || [])) {
+          const view = cam.Views?.find((v: any) => v.Status === 'Enabled');
+          if (!cam.Latitude || !cam.Longitude || !view?.Url) continue;
+          cams.push({
+            id: `ga-${cam.Id || cams.length}`, lat: cam.Latitude, lng: cam.Longitude,
+            name: cam.Location || 'GDOT Camera', city: 'Georgia', country: 'US',
+            feed_url: view.Url, source: 'GA-511',
+          });
+        }
+      }
+    } catch { /* silent */ }
+  }
+
   return cams.filter((c: any) => c.lat && c.lng);
 }
 

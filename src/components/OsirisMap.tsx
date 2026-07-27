@@ -107,7 +107,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       createDot(map, 'dot-cctv', '#39FF14', 10);
 
       // Sources
-      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'cables', 'aurora', 'air-quality', 'internet-outages'];
+      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'cables', 'aurora', 'air-quality', 'internet-outages', 'traffic-events'];
       sources.forEach(s => map.addSource(s, { type: 'geojson', data: EMPTY_FC }));
 
       // ── CONFLICT ZONES — small warning markers (not polygons) ──
@@ -235,6 +235,21 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       map.addLayer({ id: 'eq-label', type: 'symbol', source: 'earthquakes', filter: ['>=',['get','magnitude'],4.5], layout: {
         'text-field': ['concat','M',['to-string',['get','magnitude']]], 'text-size': 9, 'text-font': ['Open Sans Regular'], 'text-offset': [0,1.5],
       }, paint: { 'text-color': '#FFD700', 'text-halo-color': '#000', 'text-halo-width': 1 }});
+
+      // GA traffic events
+      map.addLayer({ id: 'traffic-dots', type: 'circle', source: 'traffic-events', paint: {
+        'circle-radius': ['interpolate',['linear'],['zoom'], 4,3, 8,6, 12,10],
+        'circle-color': ['match',['get','event_type'],
+          'accidentsAndIncidents','#FF1744',
+          'closures','#FF8C00',
+          'roadwork','#FFD700',
+          'specialEvents','#00BCD4',
+          '#9E9E9E'],
+        'circle-opacity': 0.75,
+        'circle-stroke-width': ['case',['get','full_closure'],2,1],
+        'circle-stroke-color': ['case',['get','full_closure'],'#FF1744','#000'],
+        'circle-stroke-opacity': 0.8,
+      }});
 
       // Fires
       map.addLayer({ id: 'fires-heat', type: 'circle', source: 'fires', paint: {
@@ -545,6 +560,26 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       </div>`);
     });
 
+    // ── GA traffic events ──
+    map.on('click', 'traffic-dots', e => {
+      if (!e.features?.length) return;
+      const p = e.features[0].properties as any;
+      const coords = (e.features[0].geometry as any).coordinates;
+      const tint = p.event_type === 'accidentsAndIncidents' ? '#FF1744'
+        : p.event_type === 'closures' ? '#FF8C00'
+        : p.event_type === 'roadwork' ? '#FFD700' : '#00BCD4';
+      popup(coords, `<div style="${pStyle}border:1px solid ${tint}4D;">
+        <div style="color:${tint};font-size:14px;font-weight:700;margin-bottom:4px;">${(p.subtype||p.event_type||'EVENT').toUpperCase()}</div>
+        <div style="font-size:9px;color:#E8E6E0;margin-bottom:8px;">${p.roadway||''} ${p.direction||''}</div>
+        <div style="font-size:9px;color:#E8E6E0;margin-bottom:8px;">${p.description||''}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:9px;">
+          <div><span style="color:#5C5A54;">SEVERITY</span><br/><span style="color:#E8E6E0;">${p.severity||'—'}</span></div>
+          <div><span style="color:#5C5A54;">CLOSURE</span><br/><span style="color:#E8E6E0;">${p.full_closure ? 'FULL' : 'partial'}</span></div>
+        </div>
+        ${p.lanes_affected ? `<div style="font-size:9px;color:#5C5A54;margin-top:6px;">${p.lanes_affected}</div>` : ''}
+      </div>`);
+    });
+
     // ── Satellites (with N2YO tracking) ──
     map.on('click', 'sat-dots', e => {
       if (!e.features?.length) return;
@@ -631,7 +666,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     });
 
     // ── Generic hover for clickables ──
-    ['conflict-icons','cctv-dots','eq-circles','sat-dots','fires-heat','gdelt-dots','weather-dots','infra-dots','maritime-dots','choke-dots','news-dots','war-alerts-targets','balloon-dots','rad-dots','ship-dots'].forEach(layer => {
+    ['conflict-icons','cctv-dots','eq-circles','traffic-dots','sat-dots','fires-heat','gdelt-dots','weather-dots','infra-dots','maritime-dots','choke-dots','news-dots','war-alerts-targets','balloon-dots','rad-dots','ship-dots'].forEach(layer => {
       map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
     });
@@ -825,6 +860,11 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
 
   useEffect(() => {
     if (!mapReady) return;
+    setGeo('traffic-events', activeLayers.traffic_events && data.traffic_events ? data.traffic_events.map((t: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [t.lng, t.lat] }, properties: { roadway: t.roadway, direction: t.direction, description: t.description, lanes_affected: t.lanes_affected, event_type: t.event_type, subtype: t.subtype, severity: t.severity, full_closure: t.full_closure } })) : []);
+  }, [mapReady, data.traffic_events, activeLayers.traffic_events, setGeo]);
+
+  useEffect(() => {
+    if (!mapReady) return;
     setGeo('satellites', activeLayers.satellites && data.satellites ? data.satellites.map((s: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [s.lng, s.lat] }, properties: { name: s.name, color: s.color, mission: s.mission } })) : []);
   }, [mapReady, data.satellites, activeLayers.satellites, setGeo]);
 
@@ -951,6 +991,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
   useEffect(() => {
     if (!mapReady) return;
     setVis(['eq-circles','eq-label'], activeLayers.earthquakes);
+    setVis(['traffic-dots'], activeLayers.traffic_events);
     setVis(['sat-dots'], activeLayers.satellites);
     setVis(['gdelt-dots'], activeLayers.global_incidents);
     setVis(['jam-fill','jam-label'], activeLayers.gps_jamming);

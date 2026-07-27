@@ -6,7 +6,7 @@ import {
   Plane, Satellite, Activity, Globe, Radio, Eye,
   Shield, Sun, AlertTriangle, Camera, Flame, Target,
   CloudLightning, Radiation, Tv, Anchor, Ship,
-  Cable, Sparkles, Wind, WifiOff,
+  Cable, Sparkles, Wind, WifiOff, TrafficCone,
 } from 'lucide-react';
 
 interface LayerPanelProps {
@@ -35,6 +35,7 @@ const LAYER_CONFIG = [
   { key: 'aurora', label: 'Aurora Oval', icon: Sparkles, color: '#00E676', dataKey: 'aurora' },
   { key: 'air_quality', label: 'Air Quality', icon: Wind, color: '#FFD700', dataKey: 'air_quality' },
   { key: 'internet_outages', label: 'Internet Outages', icon: WifiOff, color: '#FF1744', dataKey: 'internet_outages' },
+  { key: 'traffic_events', label: 'GA Traffic Events', icon: TrafficCone, color: '#FF8C00', dataKey: 'traffic_events' },
   { key: 'day_night', label: 'Day / Night Cycle', icon: Sun, color: '#448AFF', dataKey: null },
 ];
 

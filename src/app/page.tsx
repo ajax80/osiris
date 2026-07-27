@@ -97,6 +97,7 @@ export default function Dashboard() {
     weather: false,
     radiation: false,
     infrastructure: false,
+    traffic_events: false,
     global_incidents: true,
     war_alerts: false,
     gps_jamming: false,
@@ -278,6 +279,11 @@ export default function Dashboard() {
     if (activeLayers.cctv && !layerFetchedRef.current.has('cctv')) {
       fetchEndpoint('/api/cctv?region=all');
       layerFetchedRef.current.add('cctv');
+    }
+    // GA traffic events
+    if (activeLayers.traffic_events && !layerFetchedRef.current.has('traffic_events')) {
+      fetchEndpoint('/api/traffic-events');
+      layerFetchedRef.current.add('traffic_events');
     }
     // Maritime
     if (activeLayers.maritime && !layerFetchedRef.current.has('maritime')) {
