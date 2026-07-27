@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
+import { isRateLimited, getClientIp } from '@/lib/ssrf-guard';
 
 // DNS Lookup via Google DNS-over-HTTPS (free, no key)
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const domain = searchParams.get('domain');
   if (!domain) return NextResponse.json({ error: 'Missing domain parameter' }, { status: 400 });
+
+  const clientIp = getClientIp(req);
+  if (isRateLimited(clientIp, 20, 60_000)) {
+    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
+  }
 
   // Basic domain validation
   if (!/^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(domain)) {
