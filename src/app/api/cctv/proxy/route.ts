@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import https from 'https';
 import http from 'http';
-import { execSync } from 'child_process';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 15;
@@ -30,10 +29,20 @@ function needsLenientParsing(hostname: string): boolean {
   return LENIENT_HOSTS.some(h => hostname === h || hostname.endsWith('.' + h));
 }
 
+const MAX_REDIRECTS = 3;
+
 /** Standard proxy for well-behaved servers */
-function proxyFetch(url: string, referer: string): Promise<{ status: number; contentType: string; data: Buffer }> {
+function proxyFetch(url: string, referer: string, lenient = false, redirectsLeft = MAX_REDIRECTS): Promise<{ status: number; contentType: string; data: Buffer }> {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      reject(new Error('Unsupported protocol'));
+      return;
+    }
+    if (!isAllowed(parsed.hostname.toLowerCase())) {
+      reject(new Error('Forbidden domain'));
+      return;
+    }
     const isHttps = parsed.protocol === 'https:';
     const mod = isHttps ? https : http;
 
@@ -44,15 +53,21 @@ function proxyFetch(url: string, referer: string): Promise<{ status: number; con
         'Referer': referer,
       },
       timeout: 12000,
+      // Some camera servers emit non-standard headers that Node's strict
+      // parser rejects. Relaxing the parser is scoped to those hosts only.
+      insecureHTTPParser: lenient,
     };
-
-    if (isHttps) {
-      options.rejectUnauthorized = false;
-    }
 
     const req = mod.get(url, options, (res) => {
       if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
-        proxyFetch(res.headers.location, referer).then(resolve).catch(reject);
+        if (redirectsLeft <= 0) {
+          reject(new Error('Too many redirects'));
+          return;
+        }
+        // Re-validate the redirect target: a whitelisted host must not be able
+        // to bounce us to an internal address.
+        const next = new URL(res.headers.location, url);
+        proxyFetch(next.toString(), referer, lenient, redirectsLeft - 1).then(resolve).catch(reject);
         return;
       }
       const chunks: Buffer[] = [];
@@ -71,14 +86,10 @@ function proxyFetch(url: string, referer: string): Promise<{ status: number; con
   });
 }
 
-/** Lenient proxy using curl for servers with non-standard HTTP headers */
-function curlFetch(url: string): { status: number; contentType: string; data: Buffer } {
+/** Lenient fetch for servers with non-standard HTTP headers */
+async function curlFetch(url: string): Promise<{ status: number; contentType: string; data: Buffer }> {
   try {
-    const data = execSync(`curl.exe -s -k -L --max-time 10 "${url}"`, {
-      maxBuffer: 2 * 1024 * 1024, // 2MB
-      timeout: 12000,
-    });
-    return { status: 200, contentType: 'image/jpeg', data };
+    return await proxyFetch(url, `https://${new URL(url).hostname}/`, true);
   } catch {
     return { status: 502, contentType: 'application/json', data: Buffer.from('{}') };
   }
@@ -106,8 +117,8 @@ export async function GET(request: NextRequest) {
     let result: { status: number; contentType: string; data: Buffer };
 
     if (needsLenientParsing(target.hostname.toLowerCase())) {
-      // THB and similar servers with non-standard headers — use curl
-      result = curlFetch(target.toString());
+      // THB and similar servers with non-standard headers
+      result = await curlFetch(target.toString());
     } else {
       result = await proxyFetch(target.toString(), `https://${target.hostname}/`);
     }
